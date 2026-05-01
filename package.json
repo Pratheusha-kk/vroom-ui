@@ -1,0 +1,17 @@
+{
+  "name": "vroom-ui",
+  "version": "1.0.0",
+  "description": "Simple VROOM VROOM UI service.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ui",
+    "microservices",
+    "ride-hailing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
