@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY server.js ./
+COPY metrics.js ./
 COPY public ./public
 
 ENV PORT=5173

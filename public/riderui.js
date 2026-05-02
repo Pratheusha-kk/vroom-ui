@@ -101,7 +101,8 @@ function currentTripReportItem() {
     amount: Number(trip.fare || 0),
     payment_status: trip.payment_status || "PENDING",
     created_at: trip.created_at,
-    driver_details: trip.driver_details || null
+    driver_details: trip.driver_details || null,
+    ratings: Array.isArray(trip.ratings) ? trip.ratings : []
   };
 }
 
@@ -139,7 +140,8 @@ async function loadTripReport() {
 
   try {
     const response = await request(`/api/riders/${encodeURIComponent(unwrapRiderId(state.rider))}/trips/report`);
-    riderTripReportCache = mergeCurrentTripIntoReport(response.data);
+    const tripsWithRatings = await window.VroomApp.enrichTripReportsWithRatings(response.data);
+    riderTripReportCache = mergeCurrentTripIntoReport(tripsWithRatings);
     renderTripReport(els.riderTripReport, riderTripReportCache, "rider");
   } catch (error) {
     els.riderTripReport.className = "trip-report empty";
@@ -240,11 +242,59 @@ async function completeTrip() {
   const { state, request, setTrip, toast, emitAppEvent } = window.VroomApp;
   try {
     const response = await request(`/api/trips/${state.trip.id}/complete`, { method: "POST" });
-    setTrip(response.data);
+    const ratings = await window.VroomApp.loadTripRatings?.(response.data.id);
+    setTrip({ ...response.data, ratings: Array.isArray(ratings) ? ratings : [] });
     renderRiderTripReportFromCache();
     await loadTripReport();
     emitAppEvent("trip:completed", { trip: response.data });
     toast(response.data.payment_status === "SUCCESS" ? "Payment completed" : "Payment pending");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitRating(event) {
+  event.preventDefault();
+  const {
+    state,
+    formData,
+    request,
+    setTrip,
+    toast,
+    unwrapRiderId,
+    emitAppEvent,
+    renderRiderRatingPanel
+  } = window.VroomApp;
+
+  if (!state.trip || state.trip.status !== "COMPLETED") {
+    toast("Complete a ride before rating it");
+    return;
+  }
+
+  try {
+    const data = formData(event.currentTarget);
+    const response = await request(`/api/trips/${encodeURIComponent(state.trip.id)}/rating`, {
+      method: "POST",
+      headers: {
+        "X-Correlation-Id": `ui-rating-${state.trip.id}`
+      },
+      body: JSON.stringify({
+        raterType: "RIDER",
+        raterId: Number(unwrapRiderId(state.rider)),
+        targetType: "DRIVER",
+        targetId: Number(state.trip.driver_id),
+        score: Number(data.score),
+        feedback: data.feedback
+      })
+    });
+
+    const ratings = [...(Array.isArray(state.trip.ratings) ? state.trip.ratings : []), response.data];
+    setTrip({ ...state.trip, ratings });
+    renderRiderRatingPanel(state.trip);
+    renderRiderTripReportFromCache();
+    await loadTripReport();
+    emitAppEvent("rating:submitted", { trip: state.trip, rating: response.data });
+    toast("Rating submitted");
   } catch (error) {
     toast(error.message);
   }
@@ -279,6 +329,7 @@ function init() {
   els.startTrip.addEventListener("click", startTrip);
   els.completeTrip.addEventListener("click", completeTrip);
   els.cancelTrip.addEventListener("click", cancelTrip);
+  els.riderRatingForm.addEventListener("submit", submitRating);
   els.riderRefreshReport.addEventListener("click", loadTripReport);
   onAppEvent(handleTripAccepted);
   loadRiders();

@@ -1,6 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const { beginRequest, getMetricsSnapshot, getPrometheusMetrics } = require("./metrics");
 
 const PORT = Number.parseInt(process.env.PORT || "5173", 10);
 const GATEWAY_URL = process.env.VROOM_GATEWAY_URL || "http://localhost:8080";
@@ -46,6 +47,8 @@ function proxyToGateway(req, res, targetPath) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://ui.local");
+  const completeRequest = beginRequest(req.method, url.pathname);
+  res.on("finish", () => completeRequest(res.statusCode));
 
   if (url.pathname.startsWith("/api/")) {
     proxyToGateway(req, res, `${url.pathname}${url.search}`);
@@ -59,6 +62,16 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/health") {
     send(res, 200, "application/json; charset=utf-8", JSON.stringify({ status: "UP", service: "vroom-ui" }));
+    return;
+  }
+
+  if (url.pathname === "/metrics") {
+    send(res, 200, "application/json; charset=utf-8", JSON.stringify(getMetricsSnapshot()));
+    return;
+  }
+
+  if (url.pathname === "/metrics/prometheus") {
+    send(res, 200, "text/plain; version=0.0.4; charset=utf-8", getPrometheusMetrics());
     return;
   }
 

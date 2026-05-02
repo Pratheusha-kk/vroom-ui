@@ -207,15 +207,66 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0 12px;
   color: var(--ink);
   background: #ffffff;
   font: inherit;
+}
+
+input,
+select {
+  min-height: 42px;
+}
+
+textarea {
+  min-height: 96px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.feedback-field {
+  grid-column: span 2;
+}
+
+.rating-form button {
+  justify-self: start;
+}
+
+.rating-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rating-summary.empty {
+  display: block;
+  color: var(--muted);
+}
+
+.rating-summary div,
+.feedback-item {
+  padding: 12px;
+  border-radius: 6px;
+  background: #eef2ff;
+}
+
+.rating-summary span,
+.feedback-block > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rating-summary strong {
+  display: block;
+  margin-top: 6px;
 }
 
 .rider-preview {
@@ -383,6 +434,16 @@ select {
   overflow-wrap: anywhere;
 }
 
+.feedback-block {
+  grid-column: span 2;
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-item strong {
+  margin-bottom: 4px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -454,7 +515,13 @@ select {
   .single-action,
   .rider-preview,
   .summary-card,
-  .trip-report-card {
+  .trip-report-card,
+  .rating-summary {
     grid-template-columns: 1fr;
+  }
+
+  .feedback-field,
+  .feedback-block {
+    grid-column: auto;
   }
 }

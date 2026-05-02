@@ -102,6 +102,7 @@
             <h2>Ride History</h2>
             <button id="driverRefreshReport" class="ghost" type="button">Refresh</button>
           </div>
+          <div id="driverRatingSummary" class="rating-summary empty">No ratings yet.</div>
           <div id="driverTripReport" class="trip-report empty">No trips yet.</div>
         </div>
       </section>
@@ -145,6 +146,28 @@
             <button id="cancelTrip" class="danger" type="button" disabled>Cancel Ride</button>
           </div>
           <div id="summaryCard" class="summary-card empty">No trip selected.</div>
+        </div>
+
+        <div id="riderRatingPanel" class="panel wide hidden">
+          <div class="panel-head">
+            <h2>Rate This Ride</h2>
+            <span id="riderRatingStatus" class="pill muted">Not rated</span>
+          </div>
+          <form id="riderRatingForm" class="form-grid rating-form">
+            <label>Score
+              <select name="score" required>
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Good</option>
+                <option value="3">3 - Okay</option>
+                <option value="2">2 - Poor</option>
+                <option value="1">1 - Bad</option>
+              </select>
+            </label>
+            <label class="feedback-field">Feedback
+              <textarea name="feedback" maxlength="1000" placeholder="Clean car and smooth pickup."></textarea>
+            </label>
+            <button type="submit">Submit Rating</button>
+          </form>
         </div>
 
         <div class="panel wide">

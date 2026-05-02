@@ -121,15 +121,31 @@ function openSelectedDriver() {
 }
 
 async function loadTripReport() {
-  const { els, state, request, renderTripReport, toast, unwrapDriverId } = window.VroomApp;
+  const {
+    els,
+    state,
+    request,
+    renderTripReport,
+    toast,
+    unwrapDriverId,
+    enrichTripReportsWithRatings,
+    loadRatingSummary,
+    renderDriverRatingSummary
+  } = window.VroomApp;
   if (!state.driver) return;
 
   els.driverTripReport.className = "trip-report empty";
   els.driverTripReport.textContent = "Loading past trips...";
 
   try {
-    const response = await request(`/api/drivers/${encodeURIComponent(unwrapDriverId(state.driver))}/trips/report`);
-    renderTripReport(els.driverTripReport, response.data, "driver");
+    const driverId = unwrapDriverId(state.driver);
+    const [reportResponse, summary] = await Promise.all([
+      request(`/api/drivers/${encodeURIComponent(driverId)}/trips/report`),
+      loadRatingSummary("DRIVER", driverId).catch(() => null)
+    ]);
+    const tripsWithRatings = await enrichTripReportsWithRatings(reportResponse.data);
+    renderDriverRatingSummary(summary);
+    renderTripReport(els.driverTripReport, tripsWithRatings, "driver");
   } catch (error) {
     els.driverTripReport.className = "trip-report empty";
     els.driverTripReport.textContent = "Unable to load past trips.";
@@ -250,6 +266,14 @@ function handleTripCancelled(event) {
   }
 }
 
+function handleRatingSubmitted(event) {
+  if (event.type !== "rating:submitted") return;
+  if (driverMatchesTrip(event.payload.trip)) {
+    loadTripReport();
+    window.VroomApp.toast("New rider feedback received");
+  }
+}
+
 async function acceptPendingTrip() {
   const { request, emitAppEvent, toast } = window.VroomApp;
   if (!pendingTripRequest) return;
@@ -286,6 +310,7 @@ function init() {
   onAppEvent(handleTripRequested);
   onAppEvent(handleTripCompleted);
   onAppEvent(handleTripCancelled);
+  onAppEvent(handleRatingSubmitted);
   loadDrivers();
 }
 

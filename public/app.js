@@ -38,10 +38,14 @@ const els = {
   driverMatchStatus: document.querySelector("#driverMatchStatus"),
   tripState: document.querySelector("#tripState"),
   summaryCard: document.querySelector("#summaryCard"),
+  riderRatingPanel: document.querySelector("#riderRatingPanel"),
+  riderRatingForm: document.querySelector("#riderRatingForm"),
+  riderRatingStatus: document.querySelector("#riderRatingStatus"),
   riderTripReport: document.querySelector("#riderTripReport"),
   riderRefreshReport: document.querySelector("#riderRefreshReport"),
   driverTripReport: document.querySelector("#driverTripReport"),
   driverRefreshReport: document.querySelector("#driverRefreshReport"),
+  driverRatingSummary: document.querySelector("#driverRatingSummary"),
   acceptTrip: document.querySelector("#acceptTrip"),
   startTrip: document.querySelector("#startTrip"),
   completeTrip: document.querySelector("#completeTrip"),
@@ -201,6 +205,7 @@ function setTrip(trip) {
   els.completeTrip.disabled = !state.trip || state.trip.status !== "ONGOING";
   els.cancelTrip.disabled = !state.trip || !["REQUESTED", "ACCEPTED"].includes(state.trip.status);
   renderSummary(state.trip);
+  renderRiderRatingPanel(state.trip);
 }
 
 function renderSummary(trip) {
@@ -229,6 +234,96 @@ function formatAmount(value) {
   return `INR ${Number(value || 0).toFixed(2)}`;
 }
 
+function normalizeRating(rating) {
+  if (!rating) return null;
+  return {
+    id: rating.id,
+    sourceRatingId: rating.sourceRatingId,
+    tripId: rating.tripId,
+    raterType: rating.raterType,
+    raterId: rating.raterId,
+    targetType: rating.targetType,
+    targetId: rating.targetId,
+    score: rating.score,
+    feedback: rating.feedback,
+    createdAt: rating.createdAt
+  };
+}
+
+function ratingsForRole(trip, role) {
+  const ratings = Array.isArray(trip.ratings) ? trip.ratings.map(normalizeRating).filter(Boolean) : [];
+  if (role === "driver") {
+    return ratings.filter((rating) => rating.targetType === "DRIVER");
+  }
+  return ratings.filter((rating) => rating.raterType === "RIDER");
+}
+
+async function loadTripRatings(tripId) {
+  try {
+    const response = await request(`/api/trips/${encodeURIComponent(tripId)}/ratings`);
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+async function enrichTripReportsWithRatings(trips) {
+  if (!Array.isArray(trips) || trips.length === 0) return [];
+
+  return Promise.all(trips.map(async (trip) => ({
+    ...trip,
+    ratings: await loadTripRatings(trip.trip_id)
+  })));
+}
+
+async function loadRatingSummary(targetType, targetId) {
+  const response = await request(`/api/ratings/${targetType}/${encodeURIComponent(targetId)}/summary`);
+  return response.data;
+}
+
+function renderDriverRatingSummary(summary) {
+  if (!els.driverRatingSummary) return;
+
+  if (!summary || !summary.ratingCount) {
+    els.driverRatingSummary.className = "rating-summary empty";
+    els.driverRatingSummary.textContent = "No ratings yet.";
+    return;
+  }
+
+  els.driverRatingSummary.className = "rating-summary";
+  els.driverRatingSummary.innerHTML = `
+    <div><span>Average Rating</span><strong>${Number(summary.averageScore || 0).toFixed(1)} / 5</strong></div>
+    <div><span>Total Feedback</span><strong>${escapeHtml(summary.ratingCount)}</strong></div>
+  `;
+}
+
+function renderRiderRatingPanel(trip) {
+  if (!els.riderRatingPanel || !els.riderRatingForm || !els.riderRatingStatus) return;
+
+  const isCompleted = trip && trip.status === "COMPLETED";
+  els.riderRatingPanel.classList.toggle("hidden", !isCompleted);
+
+  if (!isCompleted) {
+    els.riderRatingStatus.textContent = "Not rated";
+    els.riderRatingStatus.className = "pill muted";
+    els.riderRatingForm.reset();
+    return;
+  }
+
+  const existing = ratingsForRole(trip, "driver").find((rating) => {
+    return String(rating.raterId) === String(unwrapRiderId(state.rider || {}));
+  });
+
+  els.riderRatingStatus.textContent = existing ? "Submitted" : "Ready";
+  els.riderRatingStatus.className = `pill ${existing ? "ok" : "warn"}`;
+  els.riderRatingForm.querySelector("button[type='submit']").disabled = Boolean(existing);
+
+  if (existing) {
+    els.riderRatingForm.elements.score.value = String(existing.score || 5);
+    els.riderRatingForm.elements.feedback.value = existing.feedback || "";
+  }
+}
+
 function renderTripReport(container, trips, role) {
   if (!container) return;
 
@@ -247,6 +342,15 @@ function renderTripReport(container, trips, role) {
     const vehicle = role === "rider" && details
       ? `<span>${escapeHtml([details.vehicle_model, details.vehicle_plate].filter(Boolean).join(" - ") || "Vehicle not available")}</span>`
       : "";
+    const ratings = ratingsForRole(trip, role);
+    const feedback = ratings.length > 0
+      ? ratings.map((rating) => `
+          <div class="feedback-item">
+            <strong>${escapeHtml(rating.score)} / 5</strong>
+            <span>${escapeHtml(rating.feedback || "No written feedback")}</span>
+          </div>
+        `).join("")
+      : `<span>No feedback yet</span>`;
     const personMeta = [
       details?.phone,
       role === "driver" ? details?.email : null,
@@ -291,6 +395,10 @@ function renderTripReport(container, trips, role) {
           <strong>${escapeHtml(details?.name || "Not available")}</strong>
           <span>${escapeHtml(personMeta)}</span>
           ${vehicle}
+        </div>
+        <div class="feedback-block">
+          <span>${role === "driver" ? "Rider Feedback" : "Your Feedback"}</span>
+          ${feedback}
         </div>
       </article>
     `;
@@ -437,6 +545,11 @@ window.VroomApp = {
   setTrip,
   populateForm,
   renderTripReport,
+  loadTripRatings,
+  enrichTripReportsWithRatings,
+  loadRatingSummary,
+  renderDriverRatingSummary,
+  renderRiderRatingPanel,
   emitAppEvent,
   onAppEvent,
   syncPanelRole
